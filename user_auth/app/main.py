@@ -1,7 +1,7 @@
 # main.py
 from contextlib import asynccontextmanager
 from typing import Union, Optional, Annotated
-from product_service import settings
+from app import settings
 from sqlmodel import Field, Session, SQLModel, create_engine, select, Sequence
 from fastapi import FastAPI, Depends
 from typing import AsyncGenerator
@@ -9,7 +9,7 @@ from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 import asyncio
 import json
 
-class Product(SQLModel, table=True):
+class Todo(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     content: str = Field(index=True)
 
@@ -40,7 +40,7 @@ async def consume_messages(topic, bootstrap_servers):
     consumer = AIOKafkaConsumer(
         topic,
         bootstrap_servers=bootstrap_servers,
-        group_id="product_group",
+        group_id="my-group",
         auto_offset_reset='earliest'
     )
 
@@ -65,7 +65,7 @@ async def consume_messages(topic, bootstrap_servers):
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
     print("Creating tables..")
     # loop.run_until_complete(consume_messages('todos', 'broker:19092'))
-    task = asyncio.create_task(consume_messages('product_service', 'broker:19092'))
+    task = asyncio.create_task(consume_messages('todos', 'broker:19092'))
     create_db_and_tables()
     yield
 
@@ -86,7 +86,7 @@ def get_session():
 
 @app.get("/")
 def read_root():
-    return {"Hello": "Product"}
+    return {"Hello": "PanaCloud"}
 
 # Kafka Producer as a dependency
 async def get_kafka_producer():
@@ -97,20 +97,20 @@ async def get_kafka_producer():
     finally:
         await producer.stop()
 
-@app.post("/add_product/", response_model=Product)
-async def register_product(product: Product, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)])->Product:
-        product_dict = {field: getattr(product, field) for field in product.dict()}
-        product_json = json.dumps(product_dict).encode("utf-8")
-        print("todoJSON:",product_json)
+@app.post("/todos/", response_model=Todo)
+async def create_todo(todo: Todo, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)])->Todo:
+        todo_dict = {field: getattr(todo, field) for field in todo.dict()}
+        todo_json = json.dumps(todo_dict).encode("utf-8")
+        print("todoJSON:", todo_json)
         # Produce message
-        await producer.send_and_wait("Products", product_json)
-        session.add(product)
-        session.commit()
-        session.refresh(product)
-        return product
+        await producer.send_and_wait("todos", todo_json)
+        # session.add(todo)
+        # session.commit()
+        # session.refresh(todo)
+        return todo
 
 
-@app.get("/product/", response_model=list[Product])
+@app.get("/todos/", response_model=list[Todo])
 def read_todos(session: Annotated[Session, Depends(get_session)]):
-        todos = session.exec(select("Product")).all()
+        todos = session.exec(select(Todo)).all()
         return todos

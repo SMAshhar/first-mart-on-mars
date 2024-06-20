@@ -25,6 +25,31 @@ services:
         - '5434:5432'
     volumes:
         - product_database:/var/lib/postgresql/data  # Expose container port 8000 to host port 8000  
+
+  user_auth:
+    build:
+      context: ./services/user_auth
+      dockerfile: Dockerfile.dev  # Not necessary if the name of the file is Dockerfile
+    volumes:
+      - ./services/user_auth:/code  # Sync local development directory with the container
+    depends_on:
+        - user_auth_db
+        - broker
+    ports:
+      - "8004:8000"
+  
+  user_auth_db:
+    image: postgres:latest  # Use the official PostgreSQL image
+    restart: always
+    container_name: user_auth_db
+    environment:
+        - POSTGRES_USER=ziakhan
+        - POSTGRES_PASSWORD=my_password
+        - POSTGRES_DB=user_auth_db
+    ports:
+        - '5435:5432'
+    volumes:
+        - user_auth_database:/var/lib/postgresql/data  # Expose container port 8000 to host port 8000  
   api:
     build:
       context: ./todo
@@ -38,14 +63,14 @@ services:
        
   api2:
     build:
-      context: ./microservice_02
+      context: ./user_auth
       dockerfile: Dockerfile.dev
     volumes:
-      - ./microservice_02:/code  # Sync local development directory with the container
+      - ./user_auth:/code  # Sync local development directory with the container
     depends_on:
         - postgres_db
     ports:
-      - "8002:8000"  # Expose container port 8000 to host port 8000  
+      - "8002:8002"  # Expose container port 8000 to host port 8000  
   postgres_db:
     image: postgres:latest  # Use the official PostgreSQL image
     restart: always
@@ -95,6 +120,8 @@ volumes:
   postgres_db:
     driver: local
   product_database:
+    driver: local
+  user_auth_database:
     driver: local
 networks:
   default:
