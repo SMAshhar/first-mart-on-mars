@@ -9,7 +9,10 @@ from aiokafka import AIOKafkaProducer, AIOKafkaConsumer
 import asyncio
 import json
 
-class Todo(SQLModel, table=True):
+# protobuf
+from app import product_pb2
+
+class Product(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     content: str = Field(index=True)
 
@@ -40,7 +43,7 @@ async def consume_messages(topic, bootstrap_servers):
     consumer = AIOKafkaConsumer(
         topic,
         bootstrap_servers=bootstrap_servers,
-        group_id="my-group",
+        group_id="product",
         auto_offset_reset='earliest'
     )
 
@@ -49,8 +52,17 @@ async def consume_messages(topic, bootstrap_servers):
     try:
         # Continuously listen for messages.
         async for message in consumer:
-            print(f"Received message: {message.value.decode()} on topic {message.topic}")
-            # Here you can add code to process each message.
+
+            # for JSON messages requiring simple decode
+            # print(f"Received message: {message.value.decode()} on topic {message.topic}")
+
+            # for protobuf messages
+            print(f"Received raw message: {message.value}")
+            new_product = product_pb2.Product()
+            new_product.ParseFromString(message.value)  # Deserialize the message
+            print(f"Deserialized Product: {new_product}")
+
+            # Here you can add code to process each message. All functions that require the consumed data
             # Example: parse the message, store it in a database, etc.
     finally:
         # Ensure to close the consumer when done.
@@ -64,8 +76,8 @@ async def consume_messages(topic, bootstrap_servers):
 @asynccontextmanager
 async def lifespan(app: FastAPI)-> AsyncGenerator[None, None]:
     print("Creating tables..")
-    # loop.run_until_complete(consume_messages('todos', 'broker:19092'))
-    task = asyncio.create_task(consume_messages('todos', 'broker:19092'))
+    # loop.run_until_complete(consume_messages('products', 'broker:19092'))
+    task = asyncio.create_task(consume_messages('product', 'broker:19092'))
     create_db_and_tables()
     yield
 
@@ -74,7 +86,7 @@ app = FastAPI(lifespan=lifespan, title="Hello World API with DB",
     version="0.0.1",
     servers=[
         {
-            "url": "http://127.0.0.1:8000", # ADD NGROK URL Here Before Creating GPT Action
+            "url": "http://127.0.0.1:8005", # ADD NGROK URL Here Before Creating GPT Action
             "description": "Development Server"
         }
         ])
@@ -97,20 +109,29 @@ async def get_kafka_producer():
     finally:
         await producer.stop()
 
-@app.post("/todos/", response_model=Todo)
-async def create_todo(todo: Todo, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)])->Todo:
-        todo_dict = {field: getattr(todo, field) for field in todo.dict()}
-        todo_json = json.dumps(todo_dict).encode("utf-8")
-        print("todoJSON:", todo_json)
+@app.post("/products/", response_model=Product)
+async def create_product(product: Product, session: Annotated[Session, Depends(get_session)], producer: Annotated[AIOKafkaProducer, Depends(get_kafka_producer)])->Product:
+        
+        # Following three lines are for JSON producer
+        product_dict = {field: getattr(product, field) for field in product.dict()}
+        product_json = json.dumps(product_dict).encode("utf-8")
+        print("productJSON:", product_json)
+
+        product_protobuf = product_pb2.Product(id=product.id, content=product.content)
+        print(f"Product Protobuf: {product_protobuf}")
+        # Serialize message into a byte string
+        serialized_product = product_protobuf.SerializeToString()
+        print(f"Serialized Product: {serialized_product}")
         # Produce message
-        await producer.send_and_wait("todos", todo_json)
-        # session.add(todo)
+        # await producer.send_and_wait("products", product_json)  # for JSON producer
+        await producer.send_and_wait("products", serialized_product)
+        # session.add(product)
         # session.commit()
-        # session.refresh(todo)
-        return todo
+        # session.refresh(product)
+        return product
 
 
-@app.get("/todos/", response_model=list[Todo])
-def read_todos(session: Annotated[Session, Depends(get_session)]):
-        todos = session.exec(select(Todo)).all()
-        return todos
+@app.get("/products/", response_model=list[Product])
+def read_products(session: Annotated[Session, Depends(get_session)]):
+        products = session.exec(select(Product)).all()
+        return products

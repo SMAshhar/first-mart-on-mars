@@ -1,88 +1,40 @@
 version: '3.8'
 name: template01
 services:
-  product_service:
-    build:
-      context: ./services/product_service
-      dockerfile: Dockerfile.dev  # Not necessary if the name of the file is Dockerfile
-    volumes:
-      - ./services/product_service:/code  # Sync local development directory with the container
-    depends_on:
-        - product_db
-        - broker
-    ports:
-      - "8003:8000"
-  
-  product_db:
-    image: postgres:latest  # Use the official PostgreSQL image
-    restart: always
-    container_name: product_db_cont
-    environment:
-        - POSTGRES_USER=ziakhan
-        - POSTGRES_PASSWORD=my_password
-        - POSTGRES_DB=product_db
-    ports:
-        - '5434:5432'
-    volumes:
-        - product_database:/var/lib/postgresql/data  # Expose container port 8000 to host port 8000  
-
-  user_auth:
-    build:
-      context: ./services/user_auth
-      dockerfile: Dockerfile.dev  # Not necessary if the name of the file is Dockerfile
-    volumes:
-      - ./services/user_auth:/code  # Sync local development directory with the container
-    depends_on:
-        - user_auth_db
-        - broker
-    ports:
-      - "8004:8000"
-  
-  user_auth_db:
-    image: postgres:latest  # Use the official PostgreSQL image
-    restart: always
-    container_name: user_auth_db
-    environment:
-        - POSTGRES_USER=ziakhan
-        - POSTGRES_PASSWORD=my_password
-        - POSTGRES_DB=user_auth_db
-    ports:
-        - '5435:5432'
-    volumes:
-        - user_auth_database:/var/lib/postgresql/data  # Expose container port 8000 to host port 8000  
   api:
     build:
       context: ./todo
       dockerfile: Dockerfile.dev
     volumes:
-      - ./todo:/code  # Sync local development directory with the container
+      - ./todo:/code # Sync local development directory with the container
     depends_on:
-        - postgres_db
+      - postgres_db
+      - broker
     ports:
-      - "8000:8000"  # Expose container port 8000 to host port 8000 
-       
+      - "8000:8000" # Expose container port 8000 to host port 8000  
   api2:
     build:
-      context: ./user_auth
+      context: ./product
       dockerfile: Dockerfile.dev
     volumes:
-      - ./user_auth:/code  # Sync local development directory with the container
+      - ./product:/code # Sync local development directory with the container
     depends_on:
-        - postgres_db
+      - postgres_db
+      - broker
     ports:
-      - "8002:8002"  # Expose container port 8000 to host port 8000  
+      - "8005:8000" # Expose container port 8000 to host port 8000  
   postgres_db:
-    image: postgres:latest  # Use the official PostgreSQL image
+    image: postgres:latest # Use the official PostgreSQL image
     restart: always
     container_name: PostgresCont
     environment:
-        - POSTGRES_USER=ziakhan
-        - POSTGRES_PASSWORD=my_password
-        - POSTGRES_DB=mydatabase
+      - POSTGRES_USER=ziakhan
+      - POSTGRES_PASSWORD=my_password
+      - POSTGRES_DB=mydatabase
     ports:
-        - '5433:5432'
+      - '5433:5432'
     volumes:
-        - postgres_db:/var/lib/postgresql/data
+      - postgres_db:/var/lib/postgresql/data
   broker:
     image: apache/kafka:3.7.0
     hostname: broker
@@ -118,10 +70,6 @@ services:
       - broker
 volumes:
   postgres_db:
-    driver: local
-  product_database:
-    driver: local
-  user_auth_database:
     driver: local
 networks:
   default:

@@ -8,6 +8,7 @@ WORKDIR /code
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
+    protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
@@ -23,7 +24,7 @@ RUN poetry config virtualenvs.create false
 RUN poetry install
 
 # Make port 8000 available to the world outside this container
-EXPOSE 8002
+EXPOSE 8000
 
 # Run the app. CMD can be overridden when starting the container
 CMD ["poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--reload"]
